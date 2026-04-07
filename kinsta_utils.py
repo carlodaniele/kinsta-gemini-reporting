@@ -1,54 +1,51 @@
 import requests
 import os
 
-BASE_URL = "https://api.kinsta.com/v2/sites"
-KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
+# API Configuration from environment variables
 KINSTA_API_KEY = os.getenv("KINSTA_API_KEY")
+KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
+KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
+BASE_URL = f"https://api.kinsta.com/v2/sites/environments/{KINSTA_ENV_ID}/analytics"
 
 def get_headers():
-    return {
-        "Authorization": f"Bearer {KINSTA_API_KEY}",
-        "Content-Type": "application/json"
-    }
+    """Returns standard authorization headers for Kinsta API."""
+    return {"Authorization": f"Bearer {KINSTA_API_KEY}"}
 
-def format_bytes_to_mb(bytes_val):
-    """Converte i byte in Megabyte (MiB) con precisione a 2 decimali."""
+def format_bytes_to_mb(bytes_value):
+    """Converts raw bytes from API to human-readable Megabytes."""
+
     try:
-        # Usiamo 1024*1024 per coerenza con il pannello MyKinsta
-        return round(float(bytes_val) / (1024 * 1024), 2)
-    except:
+        # Standard conversion to MB
+        return round(int(bytes_value) / (1024 * 1024), 2)
+
+    except (ValueError, TypeError):
         return 0
 
-def fetch_kinsta_metrics_combined(endpoints, start_date, end_date):
+def fetch_kinsta_metric(endpoint, start_date, end_date):
     """
-    Recupera i dati da più endpoint e li somma giorno per giorno.
-    Risolve il problema della banda parziale e dello sfasamento temporale.
+    Generic helper to fetch any metric from Kinsta for a specific 7-day range.
+    Supported endpoints: visits, bandwidth, disk-space.
     """
-    combined_data = {}
-    
-    for endpoint in endpoints:
-        url = f"{BASE_URL}/{endpoint}"
-        params = {
-            "company_id": KINSTA_COMPANY_ID,
-            "from": f"{start_date}T00:00:00.000Z",
-            "to": f"{end_date}T23:59:59.000Z",
-            "time_span": "12_hours" 
-        }
-        
-        try:
-            response = requests.get(url, headers=get_headers(), params=params)
-            if response.status_code == 200:
-                analytics_data = response.json().get('analytics', {}).get('analytics_response', {}).get('data', [])
-                if not analytics_data:
-                    continue
-                
-                dataset = analytics_data[0].get('dataset', [])
-                for item in dataset:
-                    # Estraiamo solo la data (YYYY-MM-DD) per mappare correttamente i valori
-                    day = item['datetime'].split('T')[0]
-                    val = float(item.get('value', 0))
-                    combined_data[day] = combined_data.get(day, 0) + val
-        except Exception as e:
-            print(f"Errore durante il fetch di {endpoint}: {e}")
-            
-    return combined_data
+
+    url = f"{BASE_URL}/{endpoint}"
+
+    params = {
+        "company_id": KINSTA_COMPANY_ID,
+        "from": f"{start_date}T00:00:00.000Z",
+        "to": f"{end_date}T23:59:59.000Z",
+        "time_span": "30_days"
+    }
+
+    try:
+        response = requests.get(url, headers=get_headers(), params=params)
+        if response.status_code == 200:
+            # Target the specific JSON structure: analytics -> analytics_response -> data
+            data_node = response.json()['analytics']['analytics_response']['data'][0]
+            total = data_node.get('total', 0)
+            dataset = data_node.get('dataset', [])[:7]
+            return total, dataset
+
+    except Exception as e:
+        print(f"Error fetching {endpoint}: {e}")
+
+    return 0, []
