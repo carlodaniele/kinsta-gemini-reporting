@@ -12,34 +12,38 @@ def get_headers():
     return {"Authorization": f"Bearer {KINSTA_API_KEY}"}
 
 def format_bytes_to_mb(bytes_value):
-    """Converts raw bytes from API to human-readable Megabytes."""
+    """Converte i byte grezzi in Megabyte con gestione errori migliorata."""
     try:
-        # Standard conversion to MB
-        return round(int(bytes_value) / (1024 * 1024), 2)
+        if bytes_value is None: return 0
+        # Kinsta API restituisce spesso i dati come stringhe o float
+        val = float(bytes_value)
+        # Conversione: Byte -> KB -> MB
+        return round(val / (1024 * 1024), 2)
     except (ValueError, TypeError):
         return 0
 
 def fetch_kinsta_metric(endpoint, start_date, end_date):
-    """
-    Generic helper to fetch any metric from Kinsta for a specific 7-day range.
-    Supported endpoints: visits, bandwidth, disk-space.
-    """
     url = f"{BASE_URL}/{endpoint}"
     params = {
         "company_id": KINSTA_COMPANY_ID,
         "from": f"{start_date}T00:00:00.000Z",
         "to": f"{end_date}T23:59:59.000Z",
-        "time_span": "30_days"
+        "time_span": "12_hours" # Usiamo un intervallo più granulare per i 7 giorni
     }
     
     try:
         response = requests.get(url, headers=get_headers(), params=params)
         if response.status_code == 200:
-            # Target the specific JSON structure: analytics -> analytics_response -> data
-            data_node = response.json()['analytics']['analytics_response']['data'][0]
-            total = data_node.get('total', 0)
-            dataset = data_node.get('dataset', [])[:7]
-            return total, dataset
+            raw_data = response.json()
+            # Navighiamo l'albero JSON di Kinsta
+            data_node = raw_data['analytics']['analytics_response']['data'][0]
+            dataset = data_node.get('dataset', [])
+            
+            # TRUCCO: Invece di fidarci del campo 'total' della risposta (che spesso è sballato),
+            # sommiamo noi i valori del dataset ricevuto per quel range esatto.
+            actual_sum = sum(float(item['value']) for item in dataset if item.get('value'))
+            
+            return actual_sum, dataset
     except Exception as e:
         print(f"Error fetching {endpoint}: {e}")
     
