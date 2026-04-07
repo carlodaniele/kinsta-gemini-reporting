@@ -1,10 +1,10 @@
-name: Generate Kinsta Weekly Report
+name: Generate Kinsta Analytics Report
 
 on:
   push:
     branches:
       - main
-  workflow_dispatch: # Permette di avviare il test manualmente dall'interfaccia GitHub
+  workflow_dispatch: # Consente l'avvio manuale dalla scheda Actions
 
 jobs:
   build-and-run:
@@ -27,7 +27,6 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          # Installazione forzata delle versioni più stabili
           pip install requests google-generativeai matplotlib fpdf2
 
       - name: Execute Report Script
@@ -40,6 +39,7 @@ jobs:
       - name: Upload Generated PDF
         uses: actions/upload-artifact@v4
         with:
-          name: Kinsta-Weekly-Report
-          path: Kinsta_Weekly_Report.pdf
+          name: Kinsta-Analytics-Report
+          # Usiamo il carattere jolly per catturare il PDF a prescindere dal nome
+          path: "*.pdf"
           retention-days: 5
