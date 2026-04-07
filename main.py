@@ -5,90 +5,107 @@ from google import generativeai as genai
 from fpdf import FPDF
 from datetime import datetime
 
-# --- Configuration from GitHub Secrets ---
+# --- Configuration ---
 KINSTA_API_KEY = os.getenv("KINSTA_API_KEY")
-KINSTA_SITE_ID = os.getenv("KINSTA_SITE_ID") # Use Site ID now, not Env ID
+KINSTA_SITE_ID = os.getenv("KINSTA_SITE_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Setup Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 class KinstaSimpleReporter:
     def __init__(self):
         self.headers = {"Authorization": f"Bearer {KINSTA_API_KEY}"}
+        # Correct base URL for site-specific usage
         self.base_url = f"https://api.kinsta.com/v2/sites/{KINSTA_SITE_ID}/usage"
 
-    def fetch_data(self, metric_path):
-        """Fetch data from the specific usage endpoint."""
-        url = f"{self.base_url}/{metric_path}"
+    def fetch_data(self, endpoint_path):
+        """Fetch monthly usage data."""
+        url = f"{self.base_url}/{endpoint_path}"
         print(f"Fetching: {url}")
         response = requests.get(url, headers=self.headers)
-        response.raise_for_status()
+        
+        if response.status_code != 200:
+            print(f"Warning: Could not fetch {endpoint_path}. Status: {response.status_code}")
+            return None
         return response.json()
 
     def create_chart(self, visits_data):
-        """Create a simple line chart from the visits data."""
-        # The API returns a list of daily stats in 'data'
-        stats = visits_data.get('data', [])
-        if not stats:
+        """Generate chart from visits data."""
+        if not visits_data or 'data' not in visits_data:
+            print("No visit data available for chart.")
             return False
             
-        days = [item['datetime'][:10] for item in stats]
-        counts = [int(item['value']) for item in stats]
+        stats = visits_data['data']
+        # Extract last 10 days for clarity in the chart
+        days = [item['datetime'][:10] for item in stats][-10:]
+        counts = [int(item['value']) for item in stats][-10:]
 
         plt.figure(figsize=(10, 5))
-        plt.plot(days, counts, color='#5333ed', marker='o', linewidth=2)
-        plt.title("Daily Visits (This Month)")
+        plt.plot(days, counts, color='#5333ed', marker='o', linewidth=2, label="Visits")
+        plt.title("Web Traffic Trend (Last 10 Days)", fontsize=14)
+        plt.grid(True, linestyle='--', alpha=0.6)
         plt.xticks(rotation=45)
+        plt.legend()
         plt.tight_layout()
         plt.savefig("chart.png")
         return True
 
-    def get_ai_summary(self, data):
-        """Ask Gemini to explain the data in plain English."""
-        prompt = f"Summarize these website analytics for a client: {data}. Max 100 words."
+    def get_ai_summary(self, data_package):
+        """Ask Gemini to interpret the raw data."""
+        prompt = (
+            f"As a web agency analyst, explain these Kinsta hosting stats for 'This Month' to a client: {data_package}. "
+            "Write 3 bullet points: Traffic, Bandwidth, and a Recommendation. Max 100 words."
+        )
         response = model.generate_content(prompt)
         return response.text
 
     def create_pdf(self, text):
-        """Generate the final PDF report."""
+        """Build the final PDF report."""
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 10, "Kinsta Monthly Performance Report", ln=True, align="C")
         
+        # Branding Header
+        pdf.set_font("Helvetica", "B", 20)
+        pdf.set_text_color(83, 51, 237)
+        pdf.cell(0, 20, "Kinsta Performance Insights", ln=True, align="C")
+        
+        # Insert Chart
         if os.path.exists("chart.png"):
-            pdf.image("chart.png", x=10, y=30, w=180)
-            
-        pdf.set_y(130)
-        pdf.set_font("Arial", "", 11)
+            pdf.image("chart.png", x=10, y=40, w=190)
+        
+        # AI Analysis Section
+        pdf.set_y(145)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(0, 0, 0)
+        pdf.cell(0, 10, "Executive Summary", ln=True)
+        
+        pdf.set_font("Helvetica", "", 11)
         pdf.multi_cell(0, 7, text)
-        pdf.output("Kinsta_Report.pdf")
+        
+        pdf.output("Kinsta_Weekly_Report.pdf")
 
 def main():
     try:
         report = KinstaSimpleReporter()
         
-        # Following your provided documentation endpoints:
-        # /usage/visits/this-month
-        # /usage/server-bandwidth/this-month
-        print("Gathering data...")
+        print("Gathering monthly usage stats...")
+        # Fixed endpoints based on latest API documentation
         visits = report.fetch_data("visits/this-month")
-        bandwidth = report.fetch_data("server-bandwidth/this-month")
+        bandwidth = report.fetch_data("bandwidth/this-month")
         
-        print("Creating chart...")
+        print("Creating visual assets...")
         report.create_chart(visits)
         
-        print("Generating AI summary...")
-        analysis = report.get_ai_summary({"visits": visits, "bandwidth": bandwidth})
+        print("Consulting Gemini AI...")
+        summary = report.get_ai_summary({"visits": visits, "bandwidth": bandwidth})
         
-        print("Saving PDF...")
-        report.create_pdf(analysis)
-        print("Done! Check your artifacts.")
+        print("Generating final PDF...")
+        report.create_pdf(summary)
+        print("Success! Process completed.")
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Unexpected Error: {e}")
 
 if __name__ == "__main__":
     main()
