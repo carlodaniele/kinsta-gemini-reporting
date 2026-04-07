@@ -88,15 +88,14 @@ def main():
     
     report_data = {}
     for key in metrics:
-        # CHIAMATA CORRETTA (senza spacchettamento)
         map_curr = fetch_kinsta_metric(key, DATES[2], DATES[3])
         map_prev = fetch_kinsta_metric(key, DATES[0], DATES[1])
         
         curr_vals = []
         prev_vals = []
         
-        # Mapping preciso sui 7 giorni
         for i in range(7):
+            # Calcolo preciso del giorno da cercare nel map
             d_curr = (curr_start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
             d_prev = (prev_start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
             
