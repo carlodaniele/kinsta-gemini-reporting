@@ -14,15 +14,15 @@ def get_headers():
 def format_bytes_to_mb(bytes_value):
     """Converts raw bytes from API to human-readable Megabytes."""
     try:
-        # Division by 1024^2 to get MB
+        # Standard conversion to MB
         return round(int(bytes_value) / (1024 * 1024), 2)
     except (ValueError, TypeError):
         return 0
 
 def fetch_kinsta_metric(endpoint, start_date, end_date):
     """
-    Generic helper to fetch any metric (visits, server-bandwidth, cdn-bandwidth) 
-    from Kinsta for a specific 7-day range.
+    Generic helper to fetch any metric from Kinsta for a specific 7-day range.
+    Supported endpoints: visits, bandwidth, disk-space.
     """
     url = f"{BASE_URL}/{endpoint}"
     params = {
@@ -35,7 +35,7 @@ def fetch_kinsta_metric(endpoint, start_date, end_date):
     try:
         response = requests.get(url, headers=get_headers(), params=params)
         if response.status_code == 200:
-            # Navigate the Kinsta JSON structure
+            # Target the specific JSON structure: analytics -> analytics_response -> data
             data_node = response.json()['analytics']['analytics_response']['data'][0]
             total = data_node.get('total', 0)
             dataset = data_node.get('dataset', [])[:7]
