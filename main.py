@@ -79,6 +79,7 @@ def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     plt.close()
 
 def main():
+    # 1. DATA ACQUISITION
     metrics = {
         "visits": {"title": "Site Visits", "unit": "(Visits)"},
         "bandwidth": {"title": "Server Bandwidth", "unit": "(MB)"},
@@ -87,20 +88,28 @@ def main():
     
     report_data = {}
     for key in metrics:
-        _, data_curr = fetch_kinsta_metric(key, DATES[2], DATES[3])
-        _, data_prev = fetch_kinsta_metric(key, DATES[0], DATES[1])
+        # CHIAMATA CORRETTA (senza spacchettamento)
+        map_curr = fetch_kinsta_metric(key, DATES[2], DATES[3])
+        map_prev = fetch_kinsta_metric(key, DATES[0], DATES[1])
         
         curr_vals = []
         prev_vals = []
+        
+        # Mapping preciso sui 7 giorni
         for i in range(7):
-            c = data_curr[i]['value'] if i < len(data_curr) else 0
-            p = data_prev[i]['value'] if i < len(data_prev) else 0
+            d_curr = (curr_start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+            d_prev = (prev_start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
+            
+            val_c = map_curr.get(d_curr, 0)
+            val_p = map_prev.get(d_prev, 0)
+            
             if "bandwidth" in key:
-                curr_vals.append(format_bytes_to_mb(c))
-                prev_vals.append(format_bytes_to_mb(p))
+                curr_vals.append(format_bytes_to_mb(val_c))
+                prev_vals.append(format_bytes_to_mb(val_p))
             else:
-                curr_vals.append(int(c))
-                prev_vals.append(int(p))
+                curr_vals.append(int(val_c))
+                prev_vals.append(int(val_p))
+                
         report_data[key] = {"curr": curr_vals, "prev": prev_vals}
 
     pdf = KinstaReport()
