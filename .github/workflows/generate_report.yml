@@ -20,9 +20,9 @@ jobs:
           python-version: '3.11'
       - name: Install Dependencies
         run: |
-          sudo apt-get update && sudo apt-get install -y libopenjp2-7
           python -m pip install --upgrade pip
-          pip install requests google-generativeai matplotlib fpdf2
+          pip uninstall -y google-generativeai 
+          pip install -r requirements.txt
       - name: Execute
         env:
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
