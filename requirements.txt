@@ -1,4 +1,4 @@
+google-genai
 requests
-google-generativeai
 matplotlib
 fpdf2
