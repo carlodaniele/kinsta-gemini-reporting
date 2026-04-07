@@ -36,12 +36,16 @@ def fetch_kinsta_metric(endpoint, start_date, end_date):
             data_node = response.json()['analytics']['analytics_response']['data'][0]
             dataset = data_node.get('dataset', [])
             
-            # Mapping Data -> Valore
             value_map = {}
             for item in dataset:
+                # Pulizia: prendiamo solo la data (YYYY-MM-DD) ignorando l'ora
                 day_key = item['datetime'].split('T')[0]
-                value_map[day_key] = float(item.get('value', 0))
-            return value_map # Ritorna solo il dizionario
+                val = float(item.get('value', 0))
+                
+                # Sommiamo se ci sono più voci per lo stesso giorno
+                value_map[day_key] = value_map.get(day_key, 0) + val
+                
+            return value_map
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error fetching {endpoint}: {e}")
     return {}
