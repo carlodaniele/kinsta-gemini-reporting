@@ -9,12 +9,11 @@ from kinsta_utils import fetch_kinsta_metrics_combined, format_bytes_to_mb
 
 # --- Configuration ---
 REPORT_LANG = "en" 
-MODEL_ID = "gemini-2.5-flash"
+MODEL_ID = "gemini-2.0-flash" # Ripristinato il tuo modello standard
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = Client(api_key=GEMINI_API_KEY)
 
-# --- Logic Date UTC (Blindata per Kinsta) ---
-# Usiamo timezone.utc per far coincidere la "mezzanotte" con quella dei server Kinsta
+# --- Date Logic (Sincronizzata UTC) ---
 today = datetime.now(timezone.utc)
 curr_end_dt = (today - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 curr_start_dt = curr_end_dt - timedelta(days=6)
@@ -28,7 +27,7 @@ DATES = [
     curr_end_dt.strftime("%Y-%m-%d")
 ]
 
-# Numeri dei giorni per asse X e Tabella
+# Etichette numeriche per i giorni del mese
 CURR_DAYS_LABELS = [(curr_start_dt + timedelta(days=i)).strftime("%d") for i in range(7)]
 PREV_DAYS_LABELS = [(prev_start_dt + timedelta(days=i)).strftime("%d") for i in range(7)]
 
@@ -49,7 +48,6 @@ class KinstaReport(FPDF):
         self.set_font("Helvetica", "B", 10)
         self.set_fill_color(240, 240, 240)
         
-        # Header Tabella con numeri giorno
         self.cell(30, 10, " Day (Prev)", 1, 0, 'C', True)
         self.cell(65, 10, f"Value {unit}", 1, 0, 'C', True)
         self.cell(30, 10, " Day (Curr)", 1, 0, 'C', True)
@@ -65,7 +63,7 @@ class KinstaReport(FPDF):
 def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     plt.figure(figsize=(10, 5))
     if is_bar:
-        plt.bar(labels, curr, color='#00c4b4', alpha=0.7, label='Current Period')
+        plt.bar(labels, curr, color='#00c4b4', alpha=0.7, label='Current')
     else:
         plt.plot(labels, curr, color='#5333ed', marker='o', linewidth=2, label='Current')
         plt.plot(labels, prev, color='#a1a1a1', linestyle='--', marker='x', label='Previous')
@@ -81,7 +79,6 @@ def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     plt.close()
 
 def main():
-    # Gruppi di metriche: "total_bandwidth" somma 3 endpoint diversi
     metrics_groups = {
         "visits": {"endpoints": ["visits"], "title": "Site Visits", "unit": ""},
         "total_bandwidth": {
@@ -93,7 +90,6 @@ def main():
     
     report_data = {}
     for key, info in metrics_groups.items():
-        # Otteniamo i dizionari mappati per data
         map_curr = fetch_kinsta_metrics_combined(info['endpoints'], DATES[2], DATES[3])
         map_prev = fetch_kinsta_metrics_combined(info['endpoints'], DATES[0], DATES[1])
         
@@ -101,7 +97,6 @@ def main():
         prev_vals = []
         
         for i in range(7):
-            # Calcoliamo la stringa data esatta per cercare nel dizionario
             d_curr = (curr_start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
             d_prev = (prev_start_dt + timedelta(days=i)).strftime("%Y-%m-%d")
             
@@ -117,7 +112,6 @@ def main():
                 
         report_data[key] = {"curr": curr_vals, "prev": prev_vals}
 
-    # Creazione PDF
     pdf = KinstaReport()
     for key, info in metrics_groups.items():
         chart_file = f"{key}_chart.png"
@@ -136,7 +130,7 @@ def main():
         response = client.models.generate_content(model=MODEL_ID, contents=summary_prompt)
         summary = response.text
     except:
-        summary = "Summary unavailable."
+        summary = "Analytical summary could not be generated."
 
     pdf.set_y(40)
     pdf.set_font("Helvetica", "", 12)
@@ -145,7 +139,7 @@ def main():
     
     report_filename = f"Kinsta_Report_{datetime.now().strftime('%Y-%m-%d')}.pdf"
     pdf.output(report_filename)
-    print(f"Success: {report_filename}")
+    print(f"Report successfully generated: {report_filename}")
 
 if __name__ == "__main__":
     main()
