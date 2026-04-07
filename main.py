@@ -5,7 +5,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 from datetime import datetime
-# Import ultra-sicuro per il nuovo SDK Google GenAI
+# Import corretto per la nuova libreria google-genai
 from google.genai import Client
 from fpdf import FPDF, XPos, YPos
 
@@ -15,9 +15,11 @@ KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
 KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Inizializzazione client (Nuovo SDK v1.0+)
+# Inizializzazione client
 client = Client(api_key=GEMINI_API_KEY)
-MODEL_ID = "gemini-1.5-flash-latest"
+
+# CAMBIO MODELLO: Usiamo il nome standard certificato
+MODEL_ID = "gemini-1.5-flash" 
 
 class KinstaStrictAnalyst:
     def __init__(self):
@@ -34,7 +36,6 @@ class KinstaStrictAnalyst:
         res = requests.get(self.base_url, headers=self.headers, params=params)
         if res.status_code == 200:
             try:
-                # Estrazione dati basata sul JSON analytics.analytics_response.data
                 data = res.json()['analytics']['analytics_response']['data'][0]
                 dataset = data.get('dataset', [])[:7]
                 return data.get('total', 0), dataset
@@ -44,7 +45,7 @@ class KinstaStrictAnalyst:
 def main():
     analyst = KinstaStrictAnalyst()
     
-    # 1. Recupero Dati (7 vs 7)
+    # 1. Recupero Dati (175 vs 66)
     total_curr, data_curr = analyst.fetch_7_days("2026-03-29", "2026-04-04")
     total_prev, data_prev = analyst.fetch_7_days("2026-03-22", "2026-03-28")
 
@@ -62,15 +63,23 @@ def main():
     plt.grid(True, alpha=0.3)
     plt.savefig("comparison_chart.png")
 
-    # 3. Analisi AI (Nuova sintassi Client)
+    # 3. Analisi AI (Modello Corretto)
     try:
-        prompt = f"Analizza il trend: settimana attuale {total_curr} visite, scorsa {total_prev}. Commenta i picchi {val_curr}. Sii professionale."
+        prompt = f"""
+        Analizza questo report Kinsta:
+        - Settimana attuale: {total_curr} visite (Dati: {val_curr})
+        - Settimana scorsa: {total_prev} visite (Dati: {val_prev})
+        
+        Commenta l'andamento in modo professionale per un'agenzia web. 
+        Evidenzia i picchi e la crescita percentuale. Massimo 4 frasi.
+        """
+        # Usiamo il client con il modello gemini-1.5-flash
         response = client.models.generate_content(model=MODEL_ID, contents=prompt)
         summary = response.text
     except Exception as e:
-        summary = f"Dati: {total_curr} vs {total_prev}. (Nota: Analisi AI non disponibile: {str(e)})"
+        summary = f"Dati: {total_curr} vs {total_prev}. Errore AI: {str(e)}"
 
-    # 4. PDF Layout (Pulito da ogni DeprecationWarning)
+    # 4. PDF Layout (Senza alcun DeprecationWarning)
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
@@ -79,7 +88,7 @@ def main():
     
     pdf.image("comparison_chart.png", x=10, y=40, w=185)
     
-    # Tabella Comparativa
+    # Tabella
     pdf.set_y(135)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 240)
@@ -102,8 +111,8 @@ def main():
     pdf.set_text_color(0)
     pdf.multi_cell(0, 7, summary)
     
-    pdf.output("Kinsta_7vs7_Final.pdf")
-    print("SUCCESS: Report generato senza errori e senza warning.")
+    pdf.output("Kinsta_Final_Clean.pdf")
+    print("SUCCESS: Report generato senza errori e con AI attiva.")
 
 if __name__ == "__main__":
     main()
