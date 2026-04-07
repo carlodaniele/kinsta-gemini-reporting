@@ -90,17 +90,27 @@ def main():
         _, data_curr = fetch_kinsta_metric(key, DATES[2], DATES[3])
         _, data_prev = fetch_kinsta_metric(key, DATES[0], DATES[1])
         
-        curr_vals = []
-        prev_vals = []
-        for i in range(7):
-            c = data_curr[i]['value'] if i < len(data_curr) else 0
-            p = data_prev[i]['value'] if i < len(data_prev) else 0
-            if "bandwidth" in key:
-                curr_vals.append(format_bytes_to_mb(c))
-                prev_vals.append(format_bytes_to_mb(p))
-            else:
-                curr_vals.append(int(c))
-                prev_vals.append(int(p))
+        # Inizializziamo le liste con 0 per tutti i 7 giorni
+        curr_vals = [0] * 7
+        prev_vals = [0] * 7
+        
+        # Mappa dei giorni per l'allineamento (0=Mon, 6=Sun)
+        # Kinsta restituisce timestamp ISO, usiamo datetime per capire il giorno
+        def fill_list_by_weekday(target_list, source_data, is_bw):
+            for item in source_data:
+                dt = datetime.fromisoformat(item['datetime'].replace('Z', '+00:00'))
+                weekday = dt.weekday() # 0 è Lunedì
+                val = float(item['value'])
+                
+                if weekday < 7:
+                    if is_bw:
+                        target_list[weekday] += format_bytes_to_mb(val)
+                    else:
+                        target_list[weekday] += int(val)
+
+        fill_list_by_weekday(curr_vals, data_curr, "bandwidth" in key)
+        fill_list_by_weekday(prev_vals, data_prev, "bandwidth" in key)
+                
         report_data[key] = {"curr": curr_vals, "prev": prev_vals}
 
     pdf = KinstaReport()
