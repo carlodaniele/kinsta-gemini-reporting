@@ -9,12 +9,11 @@ from kinsta_utils import fetch_kinsta_metric, format_bytes_to_mb
 
 # --- Configuration ---
 REPORT_LANG = "en" 
-# Ripristinato il modello che usi con successo
 MODEL_ID = "gemini-2.5-flash"
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = Client(api_key=GEMINI_API_KEY)
 
-# --- Dynamic Date Logic (Auto-updating) ---
+# --- Dynamic Date Logic ---
 today = datetime.now()
 curr_end_dt = today - timedelta(days=1)
 curr_start_dt = today - timedelta(days=7)
@@ -31,7 +30,9 @@ DATES = [
     curr_end_dt.strftime("%Y-%m-%d")
 ]
 
-DAYS_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+# Generiamo le etichette numeriche per i 7 giorni (es. "24", "25"...)
+CURR_DAYS = [(curr_start_dt + timedelta(days=i)).strftime("%d") for i in range(7)]
+PREV_DAYS = [(prev_start_dt + timedelta(days=i)).strftime("%d") for i in range(7)]
 
 class KinstaReport(FPDF):
     def header(self):
@@ -47,19 +48,21 @@ class KinstaReport(FPDF):
         self.image(chart_path, x=10, y=35, w=190)
         
         self.set_y(145)
-        self.set_font("Helvetica", "B", 11)
+        self.set_font("Helvetica", "B", 10)
         self.set_fill_color(240, 240, 240)
-        self.set_text_color(0)
         
-        self.cell(40, 10, " Day", 1, new_x=XPos.RIGHT, new_y=YPos.TOP, fill=True)
-        self.cell(75, 10, f" {PREV_RANGE} {unit}", 1, new_x=XPos.RIGHT, new_y=YPos.TOP, fill=True, align='C')
-        self.cell(75, 10, f" {CURR_RANGE} {unit}", 1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True, align='C')
+        # Header Tabella
+        self.cell(30, 10, " Day (Prev)", 1, 0, 'C', True)
+        self.cell(65, 10, f"Value {unit}", 1, 0, 'C', True)
+        self.cell(30, 10, " Day (Curr)", 1, 0, 'C', True)
+        self.cell(65, 10, f"Value {unit}", 1, 1, 'C', True)
         
         self.set_font("Helvetica", "", 10)
         for i in range(7):
-            self.cell(40, 9, f" {DAYS_LABELS[i]}", 1, new_x=XPos.RIGHT, new_y=YPos.TOP)
-            self.cell(75, 9, f" {prev_vals[i]}", 1, new_x=XPos.RIGHT, new_y=YPos.TOP, align='C')
-            self.cell(75, 9, f" {curr_vals[i]}", 1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
+            self.cell(30, 9, f" {PREV_DAYS[i]}", 1, 0, 'C')
+            self.cell(65, 9, f" {prev_vals[i]}", 1, 0, 'C')
+            self.cell(30, 9, f" {CURR_DAYS[i]}", 1, 0, 'C')
+            self.cell(65, 9, f" {curr_vals[i]}", 1, 1, 'C')
 
 def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     plt.figure(figsize=(10, 5))
@@ -72,6 +75,7 @@ def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     
     plt.title(title)
     plt.ylabel(ylabel)
+    plt.xlabel("Day of Month")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -80,7 +84,7 @@ def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
 
 def main():
     metrics = {
-        "visits": {"title": "Site Visits", "unit": "(Visits)"},
+        "visits": {"title": "Site Visits", "unit": ""},
         "bandwidth": {"title": "Server Bandwidth", "unit": "(MB)"},
         "cdn-bandwidth": {"title": "CDN Bandwidth", "unit": "(MB)"}
     }
@@ -90,52 +94,40 @@ def main():
         _, data_curr = fetch_kinsta_metric(key, DATES[2], DATES[3])
         _, data_prev = fetch_kinsta_metric(key, DATES[0], DATES[1])
         
-        curr_vals = [0] * 7
-        prev_vals = [0] * 7
-        
-        # Usiamo le date che abbiamo già calcolato all'inizio (DATES)
-        # per assicurarci che l'indice [i] corrisponda al giorno giusto
-        for i in range(len(data_curr)):
-            if i < 7:
-                val = float(data_curr[i]['value'])
-                if "bandwidth" in key:
-                    curr_vals[i] = format_bytes_to_mb(val)
-                else:
-                    curr_vals[i] = int(val)
-
-        for i in range(len(data_prev)):
-            if i < 7:
-                val = float(data_prev[i]['value'])
-                if "bandwidth" in key:
-                    prev_vals[i] = format_bytes_to_mb(val)
-                else:
-                    prev_vals[i] = int(val)
-        
+        curr_vals = []
+        prev_vals = []
+        for i in range(7):
+            c = float(data_curr[i]['value']) if i < len(data_curr) else 0
+            p = float(data_prev[i]['value']) if i < len(data_prev) else 0
+            
+            if "bandwidth" in key:
+                curr_vals.append(format_bytes_to_mb(c))
+                prev_vals.append(format_bytes_to_mb(p))
+            else:
+                curr_vals.append(int(c))
+                prev_vals.append(int(p))
+                
         report_data[key] = {"curr": curr_vals, "prev": prev_vals}
 
     pdf = KinstaReport()
     for key, info in metrics.items():
         chart_file = f"{key}_chart.png"
-        generate_chart(DAYS_LABELS, report_data[key]["curr"], report_data[key]["prev"], f"{info['title']} Trends", "Units", chart_file, is_bar=("bandwidth" in key))
+        # Usiamo i numeri del periodo corrente come etichette asse X
+        generate_chart(CURR_DAYS, report_data[key]["curr"], report_data[key]["prev"], f"{info['title']} Trends", "Units", chart_file, is_bar=("bandwidth" in key))
         pdf.add_metric_page(info["title"], chart_file, report_data[key]["prev"], report_data[key]["curr"], info["unit"])
 
-    # AI Summary con modello 2.5-flash
+    # Executive Summary
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(83, 51, 237)
-    pdf.cell(0, 15, "Executive Summary", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 15, "Executive Summary", align="C", ln=1)
     
     try:
-        summary_prompt = f"""
-        Analyze Kinsta performance for {CURR_RANGE} vs {PREV_RANGE}.
-        Current metrics: Visits {sum(report_data['visits']['curr'])}, Server BW {sum(report_data['bandwidth']['curr'])}MB, CDN BW {sum(report_data['cdn-bandwidth']['curr'])}MB.
-        Previous metrics: Visits {sum(report_data['visits']['prev'])}, Server BW {sum(report_data['bandwidth']['prev'])}MB, CDN BW {sum(report_data['cdn-bandwidth']['prev'])}MB.
-        Role: Web Strategist. Tone: Data-driven and concise. Language: {REPORT_LANG}. Max 4 sentences.
-        """
+        summary_prompt = f"Analyze Kinsta performance for {CURR_RANGE} vs {PREV_RANGE}. Current: Visits {sum(report_data['visits']['curr'])}, Server BW {sum(report_data['bandwidth']['curr'])}MB. Language: {REPORT_LANG}. Max 4 sentences."
         response = client.models.generate_content(model=MODEL_ID, contents=summary_prompt)
         summary = response.text
-    except Exception as e:
-        summary = f"Summary generation failed. Error details: {str(e)}"
+    except:
+        summary = "Analytical insights unavailable."
 
     pdf.set_y(40)
     pdf.set_font("Helvetica", "", 12)
@@ -144,7 +136,7 @@ def main():
     
     report_filename = f"Kinsta_Report_{datetime.now().strftime('%Y-%m-%d')}.pdf"
     pdf.output(report_filename)
-    print(f"Success: {report_filename} generated.")
+    print(f"Report generated: {report_filename}")
 
 if __name__ == "__main__":
     main()
