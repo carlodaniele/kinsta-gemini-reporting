@@ -5,111 +5,105 @@ from google import generativeai as genai
 from fpdf import FPDF
 from datetime import datetime
 
-# --- Configuration and Environment Variables ---
-# These should be set in GitHub Secrets for security
+# --- Configuration ---
 KINSTA_API_KEY = os.getenv("KINSTA_API_KEY")
 KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Initialize Gemini AI
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
 class KinstaReportGenerator:
     def __init__(self):
-        self.api_url = f"https://api.kinsta.com/v2/sites/environments/{KINSTA_ENV_ID}/analytics"
-        self.headers = {"Authorization": f"Bearer {KINSTA_API_KEY}"}
-        self.params = {"time_span": "last_7_days"}
+        # Base URL for environments analytics
+        self.base_url = f"https://api.kinsta.com/v2/sites/environments/{KINSTA_ENV_ID}/analytics"
+        self.headers = {
+            "Authorization": f"Bearer {KINSTA_API_KEY}",
+            "Accept": "application/json"
+        }
+        # Added timezone as it's often required by Kinsta Analytics
+        self.params = {
+            "time_span": "last_7_days",
+            "timezone": "UTC" 
+        }
 
     def get_analytics_data(self, endpoint):
-        """Fetch data from specific Kinsta Analytics endpoints."""
-        response = requests.get(f"{self.api_url}/{endpoint}", headers=self.headers, params=self.params)
+        """Fetch data from Kinsta with improved error handling."""
+        url = f"{self.base_url}/{endpoint}"
+        print(f"Calling: {url}...")
+        response = requests.get(url, headers=self.headers, params=self.params)
+        
+        if response.status_code != 200:
+            print(f"API Error Details: {response.text}")
+        
         response.raise_for_status()
         return response.json()
 
     def create_visuals(self, visits_data):
-        """Generate a trend chart for the last 7 days of visits."""
-        # Parsing data from Kinsta API format: {"data": [{"datetime": "...", "value": "..."}]}
-        dates = [item['datetime'][:10] for item in visits_data['data']]
-        values = [int(item['value']) for item in visits_data['data']]
+        """Generate trend chart from visits data."""
+        # Kinsta returns data in a 'data' list
+        stats = visits_data.get('data', [])
+        if not stats:
+            print("No data points found for the chart.")
+            return False
+
+        dates = [item['datetime'][:10] for item in stats]
+        values = [int(item['value']) for item in stats]
 
         plt.figure(figsize=(10, 5))
-        plt.plot(dates, values, marker='o', linestyle='-', color='#5333ed', linewidth=2)
+        plt.plot(dates, values, marker='o', color='#5333ed', linewidth=2)
         plt.fill_between(dates, values, color='#5333ed', alpha=0.1)
-        plt.title("Weekly Website Traffic (Unique Visits)", fontsize=14)
-        plt.xlabel("Date")
-        plt.ylabel("Visits")
+        plt.title("Weekly Traffic Insights", fontsize=14)
         plt.xticks(rotation=45)
-        plt.grid(axis='y', linestyle='--', alpha=0.7)
         plt.tight_layout()
         plt.savefig("visits_chart.png")
+        return True
 
     def generate_ai_analysis(self, raw_data):
-        """Use Gemini to transform technical metrics into a client-friendly narrative."""
-        prompt = (
-            f"As a web performance expert, analyze these Kinsta hosting metrics: {raw_data}. "
-            "Write a concise weekly summary (max 150 words) for a non-technical client. "
-            "Focus on traffic trends, bandwidth usage (Server vs CDN), and disk space health. "
-            "Maintain a professional and reassuring tone."
-        )
+        """Gemini AI narrative generation."""
+        prompt = f"Analyze these web hosting metrics from Kinsta: {raw_data}. Provide a professional 100-word summary."
         response = model.generate_content(prompt)
         return response.text
 
     def build_pdf(self, ai_text):
-        """Assemble the final PDF report with branding, charts, and AI text."""
+        """Final PDF assembly."""
         pdf = FPDF()
         pdf.add_page()
+        pdf.set_font("helvetica", "B", 16)
+        pdf.cell(0, 10, "Kinsta Performance Report", ln=True, align="C")
         
-        # Header
-        pdf.set_font("helvetica", "B", 20)
-        pdf.set_text_color(83, 51, 237) # Kinsta-ish Purple
-        pdf.cell(0, 20, "Weekly Performance Insights", ln=True, align="C")
+        if os.path.exists("visits_chart.png"):
+            pdf.image("visits_chart.png", x=10, y=30, w=190)
         
-        # Add Chart
-        pdf.image("visits_chart.png", x=10, y=40, w=190)
-        
-        # Add AI Content
-        pdf.set_y(145)
-        pdf.set_font("helvetica", "B", 14)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(0, 10, "Executive Summary", ln=True)
-        
+        pdf.set_y(130)
         pdf.set_font("helvetica", "", 11)
         pdf.multi_cell(0, 7, ai_text)
-        
-        # Footer
-        pdf.set_y(-20)
-        pdf.set_font("helvetica", "I", 8)
-        pdf.cell(0, 10, f"Generated on {datetime.now().strftime('%Y-%m-%d')} | Powered by Kinsta API & Gemini AI", align="C")
-        
         pdf.output("Kinsta_Weekly_Report.pdf")
 
 def main():
     try:
         report = KinstaReportGenerator()
         
-        print("Fetching data from Kinsta API...")
-        # Following strictly the documentation provided
-        analytics = {
+        # 1. Fetching all required metrics
+        data_package = {
             "visits": report.get_analytics_data("visits"),
-            "server_bandwidth": report.get_analytics_data("server-bandwidth"),
-            "cdn_bandwidth": report.get_analytics_data("cdn-bandwidth"),
-            "disk_usage": report.get_analytics_data("disk-usage")
+            "bandwidth": report.get_analytics_data("server-bandwidth"),
+            "cdn": report.get_analytics_data("cdn-bandwidth"),
+            "disk": report.get_analytics_data("disk-usage")
         }
 
-        print("Generating chart...")
-        report.create_visuals(analytics['visits'])
+        # 2. Visuals
+        report.create_visuals(data_package['visits'])
 
-        print("Consulting Gemini AI for analysis...")
-        summary = report.generate_ai_analysis(analytics)
+        # 3. AI Analysis
+        summary = report.generate_ai_analysis(data_package)
 
-        print("Finalizing PDF report...")
+        # 4. PDF
         report.build_pdf(summary)
-        
-        print("Success! Report saved as Kinsta_Weekly_Report.pdf")
+        print("Report generated successfully!")
 
     except Exception as e:
-        print(f"Error during execution: {e}")
+        print(f"Final Error: {e}")
 
 if __name__ == "__main__":
     main()
