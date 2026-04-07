@@ -28,23 +28,25 @@ def fetch_kinsta_metric(endpoint, start_date, end_date):
         "company_id": KINSTA_COMPANY_ID,
         "from": f"{start_date}T00:00:00.000Z",
         "to": f"{end_date}T23:59:59.000Z",
-        "time_span": "12_hours" # Usiamo un intervallo più granulare per i 7 giorni
+        "time_span": "12_hours" 
     }
     
     try:
         response = requests.get(url, headers=get_headers(), params=params)
         if response.status_code == 200:
-            raw_data = response.json()
-            # Navighiamo l'albero JSON di Kinsta
-            data_node = raw_data['analytics']['analytics_response']['data'][0]
+            data_node = response.json()['analytics']['analytics_response']['data'][0]
             dataset = data_node.get('dataset', [])
             
-            # TRUCCO: Invece di fidarci del campo 'total' della risposta (che spesso è sballato),
-            # sommiamo noi i valori del dataset ricevuto per quel range esatto.
-            actual_sum = sum(float(item['value']) for item in dataset if item.get('value'))
+            # CREIAMO UN MAPPING DATA -> VALORE
+            # Questo evita che i dati "slittino" se manca un giorno o cambia il fuso
+            value_map = {}
+            for item in dataset:
+                # Prendiamo solo la parte YYYY-MM-DD del timestamp
+                day_key = item['datetime'].split('T')[0]
+                value_map[day_key] = float(item.get('value', 0))
             
-            return actual_sum, dataset
+            return value_map
     except Exception as e:
-        print(f"Error fetching {endpoint}: {e}")
+        print(f"Error: {e}")
     
-    return 0, []
+    return {}
