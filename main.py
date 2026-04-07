@@ -3,7 +3,9 @@ import requests
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-# Passiamo alla nuova libreria ufficiale per evitare i FutureWarning
+import time
+from datetime import datetime
+# Import corretto per la nuova libreria google-genai
 from google import genai 
 from fpdf import FPDF, XPos, YPos
 
@@ -13,7 +15,7 @@ KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
 KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Inizializzazione nuovo client Google GenAI
+# Inizializzazione client (Nuovo SDK)
 client = genai.Client(api_key=GEMINI_API_KEY)
 MODEL_ID = "gemini-1.5-flash-latest"
 
@@ -32,7 +34,7 @@ class KinstaStrictAnalyst:
         res = requests.get(self.base_url, headers=self.headers, params=params)
         if res.status_code == 200:
             try:
-                # Struttura esatta dal JSON Mintlify caricato in precedenza
+                # Struttura dati da documentazione Kinsta
                 data = res.json()['analytics']['analytics_response']['data'][0]
                 dataset = data.get('dataset', [])[:7]
                 return data.get('total', 0), dataset
@@ -42,7 +44,7 @@ class KinstaStrictAnalyst:
 def main():
     analyst = KinstaStrictAnalyst()
     
-    # 1. Recupero Dati
+    # 1. Recupero Dati (7 vs 7)
     total_curr, data_curr = analyst.fetch_7_days("2026-03-29", "2026-04-04")
     total_prev, data_prev = analyst.fetch_7_days("2026-03-22", "2026-03-28")
 
@@ -54,65 +56,61 @@ def main():
     
     plt.plot(labels, val_curr, color='#5333ed', marker='o', linewidth=2, label='Settimana Attuale')
     plt.plot(labels, val_prev, color='#a1a1a1', linestyle='--', marker='x', label='Settimana Precedente')
-    plt.title("Confronto Visite 7 vs 7 Giorni")
+    plt.fill_between(labels, val_curr, color='#5333ed', alpha=0.1)
+    plt.title("Confronto Visite Settimanali: 7 vs 7 Giorni")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.savefig("comparison_chart.png")
 
-    # 3. Analisi AI (Vera chiamata al modello)
-    # Rimuoviamo il fallback statico per vedere l'errore reale se fallisce
+    # 3. Analisi AI (Nuova sintassi Client)
     try:
-        prompt_text = f"""
-        Analizza questi dati di traffico Kinsta per un report di agenzia:
-        - Totale settimana attuale: {total_curr}
-        - Totale settimana precedente: {total_prev}
-        - Dati giornalieri (Attuale): {val_curr}
-        - Dati giornalieri (Precedente): {val_prev}
+        prompt = f"""
+        Analizza questo report Kinsta:
+        - Settimana attuale: {total_curr} visite (Dati: {val_curr})
+        - Settimana scorsa: {total_prev} visite (Dati: {val_prev})
         
-        Commenta il trend, i picchi e la variazione percentuale. 
-        Sii tecnico e professionale. Massimo 100 parole.
+        Spiega l'andamento, evidenziando i picchi giornalieri e la crescita percentuale. 
+        Sii professionale, tecnico e fornisci un'analisi di almeno 3-4 frasi.
         """
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=prompt_text
-        )
+        response = client.models.generate_content(model=MODEL_ID, contents=prompt)
         summary = response.text
     except Exception as e:
-        # Se fallisce, ora stampiamo l'errore tecnico per risolvere il problema
-        summary = f"ERRORE CRITICO AI: {str(e)}"
+        summary = f"Dati rilevati: {total_curr} visite (attuale) vs {total_prev} (precedente). Errore analisi: {str(e)}"
 
-    # 4. PDF Layout
+    # 4. PDF Layout (Senza Warning)
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(83, 51, 237)
-    pdf.cell(0, 15, "Kinsta 7-Day Precision Report", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 15, "Kinsta Executive Precision Report", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     pdf.image("comparison_chart.png", x=10, y=40, w=185)
     
-    # Tabella Comparativa
+    # Tabella
     pdf.set_y(135)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(60, 8, " Giorno", 1, 0, 'L', True)
-    pdf.cell(65, 8, " Settimana Precedente", 1, 0, 'C', True)
-    pdf.cell(65, 8, " Settimana Attuale", 1, 1, 'C', True)
+    pdf.cell(60, 8, " Giorno", 1, new_x=XPos.RIGHT, new_y=YPos.TOP, fill=True)
+    pdf.cell(65, 8, " Settimana Precedente", 1, new_x=XPos.RIGHT, new_y=YPos.TOP, fill=True)
+    pdf.cell(65, 8, " Settimana Attuale", 1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
     
     pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(0)
     for i in range(7):
-        pdf.cell(60, 7, f" Giorno {i+1}", 1)
-        pdf.cell(65, 7, f" {val_prev[i]}", 1, 0, 'C')
-        pdf.cell(65, 7, f" {val_curr[i]}", 1, 1, 'C')
+        pdf.cell(60, 7, f" Giorno {i+1}", 1, new_x=XPos.RIGHT, new_y=YPos.TOP)
+        pdf.cell(65, 7, f" {val_prev[i]}", 1, new_x=XPos.RIGHT, new_y=YPos.TOP, align='C')
+        pdf.cell(65, 7, f" {val_curr[i]}", 1, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align='C')
 
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(83, 51, 237)
-    pdf.cell(0, 10, "Executive Insights", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 10, "Executive Insights (AI)", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 11)
     pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 7, summary)
     
-    pdf.output("Kinsta_Final_Report_V2.pdf")
+    pdf.output("Kinsta_7vs7_Final.pdf")
+    print("SUCCESS: Log pulito e report generato.")
 
 if __name__ == "__main__":
     main()
