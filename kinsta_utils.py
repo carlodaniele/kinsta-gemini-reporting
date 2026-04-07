@@ -30,23 +30,18 @@ def fetch_kinsta_metric(endpoint, start_date, end_date):
         "to": f"{end_date}T23:59:59.000Z",
         "time_span": "12_hours" 
     }
-    
     try:
         response = requests.get(url, headers=get_headers(), params=params)
         if response.status_code == 200:
             data_node = response.json()['analytics']['analytics_response']['data'][0]
             dataset = data_node.get('dataset', [])
             
-            # CREIAMO UN MAPPING DATA -> VALORE
-            # Questo evita che i dati "slittino" se manca un giorno o cambia il fuso
+            # Mapping Data -> Valore
             value_map = {}
             for item in dataset:
-                # Prendiamo solo la parte YYYY-MM-DD del timestamp
                 day_key = item['datetime'].split('T')[0]
                 value_map[day_key] = float(item.get('value', 0))
-            
-            return value_map
+            return value_map # Ritorna solo il dizionario
     except Exception as e:
         print(f"Error: {e}")
-    
     return {}
