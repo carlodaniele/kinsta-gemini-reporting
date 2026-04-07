@@ -1,0 +1,40 @@
+name: Generate Kinsta Weekly Report
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Permette di avviare il test manualmente dall'interfaccia GitHub
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Report Script
+        env:
+          # Mappa i Secrets di GitHub nelle variabili d'ambiente del sistema
+          KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
+          KINSTA_ENV_ID: ${{ secrets.KINSTA_ENV_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python main.py
+
+      - name: Upload Generated PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kinsta-Weekly-Report
+          path: Kinsta_Weekly_Report.pdf
+          retention-days: 5
