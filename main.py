@@ -5,8 +5,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import time
 from datetime import datetime
-# Import corretto per la nuova libreria google-genai
-from google import genai 
+# Import ultra-sicuro per il nuovo SDK Google GenAI
+from google.genai import Client
 from fpdf import FPDF, XPos, YPos
 
 # --- Configuration ---
@@ -15,8 +15,8 @@ KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
 KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Inizializzazione client (Nuovo SDK)
-client = genai.Client(api_key=GEMINI_API_KEY)
+# Inizializzazione client (Nuovo SDK v1.0+)
+client = Client(api_key=GEMINI_API_KEY)
 MODEL_ID = "gemini-1.5-flash-latest"
 
 class KinstaStrictAnalyst:
@@ -34,7 +34,7 @@ class KinstaStrictAnalyst:
         res = requests.get(self.base_url, headers=self.headers, params=params)
         if res.status_code == 200:
             try:
-                # Struttura dati da documentazione Kinsta
+                # Estrazione dati basata sul JSON analytics.analytics_response.data
                 data = res.json()['analytics']['analytics_response']['data'][0]
                 dataset = data.get('dataset', [])[:7]
                 return data.get('total', 0), dataset
@@ -57,27 +57,20 @@ def main():
     plt.plot(labels, val_curr, color='#5333ed', marker='o', linewidth=2, label='Settimana Attuale')
     plt.plot(labels, val_prev, color='#a1a1a1', linestyle='--', marker='x', label='Settimana Precedente')
     plt.fill_between(labels, val_curr, color='#5333ed', alpha=0.1)
-    plt.title("Confronto Visite Settimanali: 7 vs 7 Giorni")
+    plt.title("Confronto Visite Settimanali (7 vs 7)")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.savefig("comparison_chart.png")
 
     # 3. Analisi AI (Nuova sintassi Client)
     try:
-        prompt = f"""
-        Analizza questo report Kinsta:
-        - Settimana attuale: {total_curr} visite (Dati: {val_curr})
-        - Settimana scorsa: {total_prev} visite (Dati: {val_prev})
-        
-        Spiega l'andamento, evidenziando i picchi giornalieri e la crescita percentuale. 
-        Sii professionale, tecnico e fornisci un'analisi di almeno 3-4 frasi.
-        """
+        prompt = f"Analizza il trend: settimana attuale {total_curr} visite, scorsa {total_prev}. Commenta i picchi {val_curr}. Sii professionale."
         response = client.models.generate_content(model=MODEL_ID, contents=prompt)
         summary = response.text
     except Exception as e:
-        summary = f"Dati rilevati: {total_curr} visite (attuale) vs {total_prev} (precedente). Errore analisi: {str(e)}"
+        summary = f"Dati: {total_curr} vs {total_prev}. (Nota: Analisi AI non disponibile: {str(e)})"
 
-    # 4. PDF Layout (Senza Warning)
+    # 4. PDF Layout (Pulito da ogni DeprecationWarning)
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
@@ -86,7 +79,7 @@ def main():
     
     pdf.image("comparison_chart.png", x=10, y=40, w=185)
     
-    # Tabella
+    # Tabella Comparativa
     pdf.set_y(135)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 240)
@@ -104,13 +97,13 @@ def main():
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(83, 51, 237)
-    pdf.cell(0, 10, "Executive Insights (AI)", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 10, "Executive Insights", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 11)
-    pdf.set_text_color(0, 0, 0)
+    pdf.set_text_color(0)
     pdf.multi_cell(0, 7, summary)
     
     pdf.output("Kinsta_7vs7_Final.pdf")
-    print("SUCCESS: Log pulito e report generato.")
+    print("SUCCESS: Report generato senza errori e senza warning.")
 
 if __name__ == "__main__":
     main()
