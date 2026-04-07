@@ -19,7 +19,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = Client(api_key=GEMINI_API_KEY)
 
 # CAMBIO MODELLO: Usiamo il nome standard certificato
-MODEL_ID = "gemini-1.5-flash" 
+MODEL_ID = "gemini-2.5-flash" 
 
 class KinstaStrictAnalyst:
     def __init__(self):
