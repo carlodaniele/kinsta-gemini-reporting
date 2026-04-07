@@ -3,7 +3,8 @@ import requests
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from google import generativeai as genai
+# Passiamo alla nuova libreria ufficiale per evitare i FutureWarning
+from google import genai 
 from fpdf import FPDF, XPos, YPos
 
 # --- Configuration ---
@@ -12,8 +13,9 @@ KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
 KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+# Inizializzazione nuovo client Google GenAI
+client = genai.Client(api_key=GEMINI_API_KEY)
+MODEL_ID = "gemini-1.5-flash-latest"
 
 class KinstaStrictAnalyst:
     def __init__(self):
@@ -30,8 +32,8 @@ class KinstaStrictAnalyst:
         res = requests.get(self.base_url, headers=self.headers, params=params)
         if res.status_code == 200:
             try:
+                # Struttura esatta dal JSON Mintlify caricato in precedenza
                 data = res.json()['analytics']['analytics_response']['data'][0]
-                # Prendiamo esattamente 7 giorni se presenti
                 dataset = data.get('dataset', [])[:7]
                 return data.get('total', 0), dataset
             except: return 0, []
@@ -40,65 +42,51 @@ class KinstaStrictAnalyst:
 def main():
     analyst = KinstaStrictAnalyst()
     
-    # 1. Recupero i due blocchi da 7 giorni (Sincronizzati)
+    # 1. Recupero Dati
     total_curr, data_curr = analyst.fetch_7_days("2026-03-29", "2026-04-04")
     total_prev, data_prev = analyst.fetch_7_days("2026-03-22", "2026-03-28")
 
-    # 2. Grafico Comparativo (Due Linee)
+    # 2. Grafico Comparativo
     plt.figure(figsize=(10, 5))
     labels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]
-    
     val_curr = [int(d['value']) for d in data_curr] if data_curr else [0]*7
     val_prev = [int(d['value']) for d in data_prev] if data_prev else [0]*7
     
-    # Pareggiamo le lunghezze per sicurezza
-    val_curr = (val_curr + [0]*7)[:7]
-    val_prev = (val_prev + [0]*7)[:7]
-
     plt.plot(labels, val_curr, color='#5333ed', marker='o', linewidth=2, label='Settimana Attuale')
     plt.plot(labels, val_prev, color='#a1a1a1', linestyle='--', marker='x', label='Settimana Precedente')
-    
     plt.title("Confronto Visite 7 vs 7 Giorni")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.savefig("comparison_chart.png")
 
-    # 3. Analisi Strategica Gemini (Configurazione Avanzata)
+    # 3. Analisi AI (Vera chiamata al modello)
+    # Rimuoviamo il fallback statico per vedere l'errore reale se fallisce
     try:
-        # Prompt arricchito con contesto e istruzioni di stile
-        prompt = f"""
-        Agisci come un Senior Data Analyst per un'agenzia web. 
-        Analizza questo confronto settimanale di traffico:
-        - Settimana precedente: {total_prev} visite.
-        - Settimana attuale: {total_curr} visite.
-        - Dati giornalieri attuali: {[d['value'] for d in data_curr]}
+        prompt_text = f"""
+        Analizza questi dati di traffico Kinsta per un report di agenzia:
+        - Totale settimana attuale: {total_curr}
+        - Totale settimana precedente: {total_prev}
+        - Dati giornalieri (Attuale): {val_curr}
+        - Dati giornalieri (Precedente): {val_prev}
         
-        Istruzioni:
-        1. Commenta la crescita percentuale.
-        2. Identifica il giorno di picco e il giorno di flessione.
-        3. Fornisci un'interpretazione strategica (es. efficacia delle campagne o dei contenuti).
-        4. Usa un tono professionale, incoraggiante e sintetico (max 150 parole).
+        Commenta il trend, i picchi e la variazione percentuale. 
+        Sii tecnico e professionale. Massimo 100 parole.
         """
-        
-        # Chiamata con gestione esplicita della risposta
-        response = model.generate_content(prompt)
-        
-        if response.text:
-            summary = response.text
-        else:
-            summary = "Analisi generata ma priva di testo. Verificare i parametri del modello."
-            
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt_text
+        )
+        summary = response.text
     except Exception as e:
-        # Fallback intelligente che calcola almeno la percentuale se l'AI fallisce
-        perc = round(((total_curr - total_prev) / total_prev) * 100) if total_prev > 0 else 0
-        summary = f"Il traffico ha registrato un incremento del {perc}%. Si osserva una forte trazione nei giorni centrali della settimana, con un picco massimo di 45 visite giornaliere."
+        # Se fallisce, ora stampiamo l'errore tecnico per risolvere il problema
+        summary = f"ERRORE CRITICO AI: {str(e)}"
 
     # 4. PDF Layout
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(83, 51, 237)
-    pdf.cell(0, 15, "Kinsta 7-Day Comparison Report", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 15, "Kinsta 7-Day Precision Report", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
     pdf.image("comparison_chart.png", x=10, y=40, w=185)
     
@@ -118,11 +106,13 @@ def main():
 
     pdf.ln(10)
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 10, "Executive Summary", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.set_text_color(83, 51, 237)
+    pdf.cell(0, 10, "Executive Insights", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 11)
+    pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 7, summary)
     
-    pdf.output("Kinsta_7vs7_Report.pdf")
+    pdf.output("Kinsta_Final_Report_V2.pdf")
 
 if __name__ == "__main__":
     main()
