@@ -12,11 +12,10 @@ KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
 KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-# Configurazione Gemini con l'ultimo modello Flash
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-flash-latest')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
-class KinstaMintlifyAnalyst:
+class KinstaFinalAnalyst:
     def __init__(self):
         self.headers = {"Authorization": f"Bearer {KINSTA_API_KEY}"}
         self.base_url = f"https://api.kinsta.com/v2/sites/environments/{KINSTA_ENV_ID}/analytics/visits"
@@ -38,47 +37,58 @@ class KinstaMintlifyAnalyst:
         return 0, []
 
 def main():
-    analyst = KinstaMintlifyAnalyst()
+    analyst = KinstaFinalAnalyst()
     
-    # Recupero dati
+    # Recupero dati reali
     total_curr, dataset_curr = analyst.fetch_visits("2026-03-29", "2026-04-04")
     total_prev, _ = analyst.fetch_visits("2026-03-22", "2026-03-28")
 
-    # --- CHIAMATA AI (CORRETTA) ---
+    # 1. Generazione Grafico (Ripristinato)
+    plt.figure(figsize=(10, 4))
+    if dataset_curr:
+        days = [d['key'][8:10] for d in dataset_curr]
+        counts = [int(d['value']) for d in dataset_curr]
+        plt.plot(days, counts, color='#5333ed', marker='o', linewidth=2, label='Visite Giornaliere')
+        plt.fill_between(days, counts, color='#5333ed', alpha=0.1)
+        plt.title("Andamento Visite Settimanali (29 Mar - 04 Apr)")
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.legend()
+    plt.tight_layout()
+    plt.savefig("weekly_chart.png")
+
+    # 2. Analisi AI
     prompt = f"""
-    Analizza questo report di traffico web Kinsta:
-    - Settimana 29 Mar - 04 Apr: {total_curr} visite.
-    - Settimana precedente: {total_prev} visite.
-    - Dati giornalieri: {dataset_curr}.
-    
-    Commenta il trend in modo professionale per un'agenzia web (max 4 righe).
+    Analizza questo trend di traffico:
+    - Settimana Corrente (29 Mar - 04 Apr): {total_curr} visite.
+    - Settimana Precedente: {total_prev} visite.
+    Dati giornalieri: {dataset_curr}.
+    Commenta la crescita e i picchi giornalieri in modo professionale.
     """
-    
     try:
         response = model.generate_content(prompt)
-        # Verifichiamo la presenza di una risposta valida
-        if response and response.text:
-            summary = response.text
-        else:
-            summary = "Analisi generata ma senza contenuto testuale. Verificare le impostazioni di sicurezza."
-    except Exception as e:
-        summary = f"Errore durante la chiamata a Gemini: {str(e)}"
+        summary = response.text if response.text else "Analisi generata."
+    except:
+        summary = "Analisi AI non disponibile al momento."
 
-    # --- GENERAZIONE PDF ---
+    # 3. Generazione PDF
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(83, 51, 237)
-    pdf.cell(0, 20, "Kinsta Weekly Analytics Report", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 15, "Kinsta Executive Weekly Report", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # Sezione Sintesi
+    # Riepilogo Numerico
+    pdf.ln(5)
     pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(0)
-    pdf.cell(0, 10, f"Visite Totali (Settimana Corrente): {total_curr}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.cell(0, 10, f"Visite Totali (Settimana Precedente): {total_prev}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 10, f"Visite Settimana Corrente: {total_curr}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.cell(0, 10, f"Visite Settimana Precedente: {total_prev}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
-    # --- TABELLA GIORNALIERA ---
-    pdf.ln(5)
+    # Grafico (Posizionato centralmente)
+    pdf.image("weekly_chart.png", x=10, y=55, w=185)
+    
+    # Tabella Giornaliera (Spostata sotto il grafico)
+    pdf.set_y(140)
     pdf.set_font("Helvetica", "B", 10)
     pdf.set_fill_color(240, 240, 240)
     pdf.cell(95, 8, " Data", 1, 0, 'L', True)
@@ -86,21 +96,19 @@ def main():
     
     pdf.set_font("Helvetica", "", 10)
     for entry in dataset_curr:
-        clean_date = entry['key'][:10]
-        pdf.cell(95, 7, f" {clean_date}", 1)
+        pdf.cell(95, 7, f" {entry['key'][:10]}", 1)
         pdf.cell(95, 7, f" {entry['value']}", 1, 1, 'C')
 
-    # Sezione AI
+    # Executive Summary
     pdf.ln(10)
-    pdf.set_font("Helvetica", "B", 13)
+    pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(83, 51, 237)
     pdf.cell(0, 10, "Executive Insights (AI Analysis)", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
-    pdf.set_font("Helvetica", "", 11)
+    pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(0)
     pdf.multi_cell(0, 6, summary)
     
-    pdf.output("Kinsta_Final_Report.pdf")
-    print("SUCCESS: Report PDF generato con successo.")
+    pdf.output("Kinsta_Final_Complete_Report.pdf")
 
 if __name__ == "__main__":
     main()
