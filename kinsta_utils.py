@@ -16,7 +16,10 @@ def format_bytes_to_mb(bytes_value):
 
     try:
         # Standard conversion to MB
-        return round(int(bytes_value) / (1024 * 1024), 2)
+        # return round(int(bytes_value) / (1024 * 1024), 2)
+
+        # Decimal standard (used in MyKinsta dashboard) 
+        return round(int(bytes_value) / 1_000_000, 2)
 
     except (ValueError, TypeError):
         return 0
