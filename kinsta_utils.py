@@ -3,6 +3,7 @@ import os
 
 # API Configuration from environment variables
 KINSTA_API_KEY = os.getenv("KINSTA_API_KEY")
+KINSTA_SITE_ID = os.getenv("KINSTA_SITE_ID")
 KINSTA_ENV_ID = os.getenv("KINSTA_ENV_ID")
 KINSTA_COMPANY_ID = os.getenv("KINSTA_COMPANY_ID")
 BASE_URL = f"https://api.kinsta.com/v2/sites/environments/{KINSTA_ENV_ID}/analytics"
@@ -55,7 +56,7 @@ def fetch_kinsta_metric(endpoint, start_date, end_date):
 
 def fetch_site_name():
     """Fetches the site name from Kinsta API using the Environment ID."""
-    url = f"https://api.kinsta.com/v2/sites/environments/{KINSTA_ENV_ID}"
+    url = f"https://api.kinsta.com/v2/sites/{KINSTA_SITE_ID}"
     try:
         response = requests.get(url, headers=get_headers())
         if response.status_code == 200:
