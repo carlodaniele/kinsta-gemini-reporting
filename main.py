@@ -10,7 +10,7 @@ from kinsta_utils import fetch_kinsta_metric, format_bytes_to_mb
 # --- Configuration ---
 REPORT_LANG = "en" 
 # Nota: Assicurati che l'ID del modello sia corretto (es. gemini-2.0-flash)
-MODEL_ID = "gemini-2.0-flash" 
+MODEL_ID = "gemini-2.5-flash" 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = Client(api_key=GEMINI_API_KEY)
 
