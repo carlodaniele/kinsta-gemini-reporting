@@ -52,3 +52,19 @@ def fetch_kinsta_metric(endpoint, start_date, end_date):
         print(f"Error fetching {endpoint}: {e}")
 
     return 0, []
+
+def fetch_site_name():
+    """Fetches the site name from Kinsta API using the Environment ID."""
+    url = f"https://api.kinsta.com/v2/sites/environments/{KINSTA_ENV_ID}"
+    try:
+        response = requests.get(url, headers=get_headers())
+        if response.status_code == 200:
+            # L'API restituisce il nome del sito e dell'ambiente
+            data = response.json()
+            site_label = data['site']['display_name']
+            env_label = data['display_name']
+            return f"{site_label} ({env_label})"
+    except Exception as e:
+        print(f"Error fetching site name: {e}")
+    return "Unknown Site"
+    
