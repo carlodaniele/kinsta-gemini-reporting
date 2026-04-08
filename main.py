@@ -9,7 +9,8 @@ from kinsta_utils import fetch_kinsta_metric, format_bytes_to_mb
 
 # --- Configuration ---
 REPORT_LANG = "en" 
-MODEL_ID = "gemini-2.5-flash"
+# Nota: Assicurati che l'ID del modello sia corretto (es. gemini-2.0-flash)
+MODEL_ID = "gemini-2.0-flash" 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = Client(api_key=GEMINI_API_KEY)
 
@@ -30,7 +31,6 @@ DATES = [
     curr_end_dt.strftime("%Y-%m-%d")
 ]
 
-# Generiamo le etichette numeriche per i 7 giorni (es. "24", "25"...)
 CURR_DAYS = [(curr_start_dt + timedelta(days=i)).strftime("%d") for i in range(7)]
 PREV_DAYS = [(prev_start_dt + timedelta(days=i)).strftime("%d") for i in range(7)]
 
@@ -38,7 +38,8 @@ class KinstaReport(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 8)
         self.set_text_color(150)
-        self.cell(0, 10, f"Kinsta Analytics Report | Generated: {datetime.now().strftime('%Y-%m-%d')}", align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        self.cell(0, 10, f"Kinsta Analytics Report | Generated: {datetime.now().strftime('%Y-%m-%d')}", 
+                  align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     def add_metric_page(self, title, chart_path, prev_vals, curr_vals, unit=""):
         self.add_page()
@@ -51,18 +52,18 @@ class KinstaReport(FPDF):
         self.set_font("Helvetica", "B", 10)
         self.set_fill_color(240, 240, 240)
         
-        # Header Tabella
-        self.cell(30, 10, " Day (Prev)", 1, 0, 'C', True)
-        self.cell(65, 10, f"Value {unit}", 1, 0, 'C', True)
-        self.cell(30, 10, " Day (Curr)", 1, 0, 'C', True)
-        self.cell(65, 10, f"Value {unit}", 1, 1, 'C', True)
+        # Header Tabella - Fix Deprecation Warnings
+        self.cell(30, 10, " Day (Prev)", border=1, align='C', fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
+        self.cell(65, 10, f"Value {unit}", border=1, align='C', fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
+        self.cell(30, 10, " Day (Curr)", border=1, align='C', fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
+        self.cell(65, 10, f"Value {unit}", border=1, align='C', fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
         self.set_font("Helvetica", "", 10)
         for i in range(7):
-            self.cell(30, 9, f" {PREV_DAYS[i]}", 1, 0, 'C')
-            self.cell(65, 9, f" {prev_vals[i]}", 1, 0, 'C')
-            self.cell(30, 9, f" {CURR_DAYS[i]}", 1, 0, 'C')
-            self.cell(65, 9, f" {curr_vals[i]}", 1, 1, 'C')
+            self.cell(30, 9, f" {PREV_DAYS[i]}", border=1, align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.cell(65, 9, f" {prev_vals[i]}", border=1, align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.cell(30, 9, f" {CURR_DAYS[i]}", border=1, align='C', new_x=XPos.RIGHT, new_y=YPos.TOP)
+            self.cell(65, 9, f" {curr_vals[i]}", border=1, align='C', new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
 def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     plt.figure(figsize=(10, 5))
@@ -112,22 +113,32 @@ def main():
     pdf = KinstaReport()
     for key, info in metrics.items():
         chart_file = f"{key}_chart.png"
-        # Usiamo i numeri del periodo corrente come etichette asse X
         generate_chart(CURR_DAYS, report_data[key]["curr"], report_data[key]["prev"], f"{info['title']} Trends", "Units", chart_file, is_bar=("bandwidth" in key))
         pdf.add_metric_page(info["title"], chart_file, report_data[key]["prev"], report_data[key]["curr"], info["unit"])
 
-    # Executive Summary
+    # --- Executive Summary con Prompt Corretto ---
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(83, 51, 237)
-    pdf.cell(0, 15, "Executive Summary", align="C", ln=1)
+    pdf.cell(0, 15, "Executive Summary", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     
+    # Calcolo totali per il prompt
+    curr_visits = sum(report_data['visits']['curr'])
+    prev_visits = sum(report_data['visits']['prev'])
+    curr_bw = sum(report_data['bandwidth']['curr'])
+    prev_bw = sum(report_data['bandwidth']['prev'])
+
     try:
-        summary_prompt = f"Analyze Kinsta performance for {CURR_RANGE} vs {PREV_RANGE}. Current: Visits {sum(report_data['visits']['curr'])}, Server BW {sum(report_data['bandwidth']['curr'])}MB. Language: {REPORT_LANG}. Max 4 sentences."
+        summary_prompt = (
+            f"Analyze Kinsta performance. "
+            f"Current Period ({CURR_RANGE}): {curr_visits} visits, {curr_bw:.2f}MB server bandwidth. "
+            f"Previous Period ({PREV_RANGE}): {prev_visits} visits, {prev_bw:.2f}MB server bandwidth. "
+            f"Compare these two periods. Language: {REPORT_LANG}. Max 4 sentences."
+        )
         response = client.models.generate_content(model=MODEL_ID, contents=summary_prompt)
         summary = response.text
-    except:
-        summary = "Analytical insights unavailable."
+    except Exception as e:
+        summary = f"Analytical insights unavailable. Error: {str(e)}"
 
     pdf.set_y(40)
     pdf.set_font("Helvetica", "", 12)
