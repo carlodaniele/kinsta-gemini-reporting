@@ -5,8 +5,7 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
+# Rimosso FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 per evitare il warning punycode
 
 jobs:
   build-and-run:
@@ -17,6 +16,9 @@ jobs:
 
       - name: Set up Python
         uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip' 
 
       - name: Install dependencies
         run: |
