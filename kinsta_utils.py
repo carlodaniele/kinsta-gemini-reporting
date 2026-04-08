@@ -36,8 +36,7 @@ def fetch_kinsta_metric(endpoint, start_date, end_date):
     params = {
         "company_id": KINSTA_COMPANY_ID,
         "from": f"{start_date}T00:00:00.000Z",
-        "to": f"{end_date}T23:59:59.000Z",
-        "time_span": "30_days"
+        "to": f"{end_date}T23:59:59.000Z"
     }
 
     try:
