@@ -30,10 +30,10 @@ DATES = [
     curr_end_dt.strftime("%Y-%m-%d")
 ]
 
-# Etichette per le tabelle: "01 Mon", "02 Tue"...
+# Table labels: "01 Mon", "02 Tue"...
 CURR_DAYS_LABELS = [(curr_start_dt + timedelta(days=i)).strftime("%d %a") for i in range(7)]
 PREV_DAYS_LABELS = [(prev_start_dt + timedelta(days=i)).strftime("%d %a") for i in range(7)]
-# Etichette per i grafici (solo numero per non affollare l'asse X)
+# Graph labels
 X_AXIS_LABELS = [(curr_start_dt + timedelta(days=i)).strftime("%d") for i in range(7)]
 
 class KinstaReport(FPDF):
@@ -44,34 +44,33 @@ class KinstaReport(FPDF):
     def header(self):
         self.set_font("Helvetica", "B", 8)
         self.set_text_color(150)
-        # Nome del sito a sinistra
+        # Site name - align left
         self.cell(100, 10, f"Site: {self.site_name}", align="L")
-        # Generato il... a destra
+        # Generated on---
         self.cell(0, 10, f"Kinsta Analytics Report | Generated: {datetime.now().strftime('%Y-%m-%d')}", 
                   align="R", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     def add_metric_page(self, title, chart_path, prev_vals, curr_vals, unit=""):
         self.add_page()
-        # Titolo Pagina
+        # Page title
         self.set_font("Helvetica", "B", 24)
         self.set_text_color(83, 51, 237)
         self.cell(0, 15, title, align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Sottotitolo con date
+        # Subtitle
         self.set_font("Helvetica", "I", 10)
         self.set_text_color(120)
         self.cell(0, 5, f"Comparison: {CURR_RANGE} vs {PREV_RANGE}", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         
-        # Spazio per il grafico
         self.image(chart_path, x=10, y=42, w=190)
         
-        # Tabella dati
+        # Data tables
         self.set_y(150)
         self.set_font("Helvetica", "B", 10)
-        self.set_fill_color(245, 245, 255) # Celeste tenue per header tabella
+        self.set_fill_color(245, 245, 255)
         self.set_text_color(83, 51, 237)
         
-        # Header Tabella (Larghezze regolate per far stare il nome del giorno)
+        # Table header Tabella
         col1, col2 = 35, 60
         self.cell(col1, 10, " Day (Prev)", border=1, align='C', fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
         self.cell(col2, 10, f"Value {unit}", border=1, align='C', fill=True, new_x=XPos.RIGHT, new_y=YPos.TOP)
@@ -81,7 +80,7 @@ class KinstaReport(FPDF):
         self.set_font("Helvetica", "", 10)
         self.set_text_color(50)
         for i in range(7):
-            # Zebra striping (righe alternate)
+            # Zebra striping
             fill = (i % 2 == 0)
             if fill: self.set_fill_color(250, 250, 250)
             else: self.set_fill_color(255, 255, 255)
@@ -95,24 +94,23 @@ def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     plt.figure(figsize=(10, 5), dpi=100)
     ax = plt.gca()
     
-    # Rimuoviamo i bordi superiore e destro per un look pulito
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_color('#dddddd')
     ax.spines['bottom'].set_color('#dddddd')
 
     if is_bar:
-        # Grafico a barre per Bandwidth
+        # Bar Chart for bandwidth
         bars = plt.bar(labels, curr, color='#00c4b4', alpha=0.6, label='Current Period', width=0.6)
-        # Aggiunta etichette sopra le barre
+        # Add labels above the bars
         for bar in bars:
             height = bar.get_height()
             plt.text(bar.get_x() + bar.get_width()/2., height + 0.02, f'{height}', ha='center', va='bottom', fontsize=8, color='#00a194')
     else:
-        # Grafico a linee per Visits
+        # Line chart for visits
         plt.plot(labels, curr, color='#5333ed', marker='o', markersize=6, linewidth=3, label='Current', zorder=3)
         plt.plot(labels, prev, color='#a1a1a1', linestyle='--', marker='x', markersize=5, linewidth=1.5, label='Previous', alpha=0.6)
-        # Riempimento sfumato sotto la linea
+        
         plt.fill_between(labels, curr, color='#5333ed', alpha=0.1)
     
     plt.title(title, fontsize=14, pad=20, color='#333333', fontweight='bold')
@@ -125,7 +123,7 @@ def generate_chart(labels, curr, prev, title, ylabel, filename, is_bar=False):
     plt.close()
 
 def main():
-    # Recupero Nome Sito tramite API
+    # Retrieve site name via API
     site_display_name = fetch_site_name()
 
     metrics = {
@@ -154,7 +152,7 @@ def main():
                 
         report_data[key] = {"curr": curr_vals, "prev": prev_vals}
 
-    # Creazione PDF passando il nome del sito
+    # Create a PDF by site name
     pdf = KinstaReport(site_name=site_display_name)
     
     for key, info in metrics.items():
