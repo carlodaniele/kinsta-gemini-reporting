@@ -26,6 +26,7 @@ jobs:
         env:
           KINSTA_API_KEY: ${{ secrets.KINSTA_API_KEY }}
           KINSTA_ENV_ID: ${{ secrets.KINSTA_ENV_ID }}
+          KINSTA_SITE_ID: ${{ secrets.KINSTA_SITE_ID }}
           KINSTA_COMPANY_ID: ${{ secrets.KINSTA_COMPANY_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python main.py
